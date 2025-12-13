@@ -1,0 +1,283 @@
+---
+title: "DSC640Weeks5-6Exercise"
+author: "Jon Jacobson"
+date: "2025-07-06"
+output: pdf_document
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+library(formatR)
+knitr::opts_chunk$set(echo = TRUE, tidy.opts=list(width.cutoff=60),tidy=TRUE,fig.width = 10, fig.height = 5)
+
+library(caTools) 
+library(class) 
+library(dplyr)
+library(e1071) 
+library(factoextra)
+library(foreign)
+library(ggplot2)
+library(Metrics)
+library(openxlsx)
+library(purrr)
+library(readr)
+library(readxl)
+library(stringr)
+library(janitor)
+library(tidyr)
+```
+
+```{r}
+theft_map <- read_csv('carTheftsMap.csv',
+                 show_col_types = FALSE)
+head(theft_map)
+
+theft_mil <- read_csv('KiaHyundaiMilwaukeeData.csv',
+                 show_col_types = FALSE)
+head(theft_mil)
+
+theft_kia<- read_csv('kiaHyundaiThefts.csv',
+                 show_col_types = FALSE)
+head(theft_kia)
+```
+
+```{r results = 'hide', warning=FALSE}
+# https://kyleb.rbind.io/posts/2020-06-22_excel-data-multiple-headers/importing-excel-data-with-multiple-header-rows
+
+file_path <- 'motherboard_theft_data.xlsx'
+two_rows <- read_excel(file_path, n_max = 2, col_names = FALSE, .name_repair = "minimal")
+name_cols <- two_rows %>%
+  t() %>%
+  as_tibble() # back to tibble
+```
+```{r}
+# use dplyr fill to fill in the NA's
+name_filled <- name_cols %>% fill(V1)
+
+# Add a column that concatenates the others
+name_with_concat <- name_filled %>%
+  mutate(
+    new_names = paste(V1,V2, sep = "PIPECHAR")
+  )
+
+# Extract just the concatenated column
+names <-  name_with_concat %>% pull(new_names)
+
+# Add the 'date' column name to the front of the list
+with_date <- names |> append("date", after = 0)
+theft_all <- readxl::read_excel(file_path, col_names = with_date, skip = 2) %>%
+  # Remove casing, whitespace, and non-alphanumeric characters
+  janitor::clean_names()
+
+names(theft_all) <- gsub("_pipechar_", "|", names(theft_all))    # Restore "|"
+names(theft_all) <- gsub("pipechar_", "|", names(theft_all))    # Restore "|"
+names(theft_all) <- gsub("_pipechar", "|", names(theft_all))    # Restore "|"
+names(theft_all) <- gsub("pipechar", "|", names(theft_all))    # Restore "|"
+head(theft_all)
+```
+# Stacked Area of Milwaukee
+```{r}
+head(theft_mil)
+```
+```{r}
+mil_long <- theft_mil %>%
+  pivot_longer(cols = c('countKiaHyundaiThefts','countOtherThefts'),
+               names_to = "type",
+               values_to = "value")
+mil_long$date <- as.Date(paste("01", mil_long$month, mil_long$year), format = "%d %b %Y")
+mil_long <- mil_long %>%
+  mutate(type = recode(type,
+                       "countKiaHyundaiThefts" = "Kia & Hyundai Thefts",
+                       "countOtherThefts" = "Other Thefts"))
+
+head(mil_long)
+```
+```{r}
+ggplot(mil_long, aes(x = date, y = value, fill = type)) +
+  geom_area(position = "identity", alpha = 0.6) +
+  labs(title = "Milwaukee Car Thefts", x = "", y = "") +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal()
+```
+```{r}
+library(dplyr)
+
+mil_pct <- mil_long %>%
+  group_by(date) %>%
+  mutate(pct_value = value / sum(value) * 100) %>%
+  ungroup()
+library(ggplot2)
+
+ggplot(mil_pct, aes(x = date, y = pct_value, fill = type)) +
+  geom_area(position = "stack") +
+  labs(title = "Milwaukee Car Theft Percentages",
+       x = "Date", y = "Share (%)") +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal()
+```
+```{r}
+theft_kia
+```
+```{r}
+library(dplyr)
+
+tree_map <- theft_kia %>%
+  group_by(state, city) %>%
+  summarise(value = sum(countKiaHyundaiThefts), .groups = "drop")
+
+tree_map <- tree_map %>%
+  filter(!is.na(state))
+
+library(ggplot2)
+library(treemapify)
+
+ggplot(tree_map, aes(
+  area = value,
+  fill = state,
+  label = city,
+  subgroup = state
+)) +
+  geom_treemap() +
+  geom_treemap_subgroup_border() +
+  geom_treemap_subgroup_text(place = "top", grow = TRUE, alpha = 0.5, colour = "white") +
+  geom_treemap_text(colour = "white", place = "centre", grow = TRUE) +
+  theme_minimal()
+```
+```{r}
+theft_all <- theft_all %>%
+  mutate(across(where(is.character), ~ as.double(.)))
+
+
+thefts <- theft_all %>%
+  pivot_longer(
+    cols = -date,
+    names_to = c("city", "type"),
+    names_sep = "\\|",  # splits names like 'denver_kia' into 'denver' and 'kia'
+    values_to = "value"
+  ) %>%
+  filter(!is.na(value))  # Drops rows with missing values
+
+# Pivot wider to get both values side by side per city-date
+others <- thefts %>%
+  pivot_wider(names_from = type, values_from = value) %>%
+  mutate(others = all - kia_hyundais) %>%
+  select(date, city, others) %>%
+  mutate(type = "others") %>%
+  rename(value = others)
+
+thefts <- bind_rows(
+  thefts,
+  others
+) %>%
+  arrange(city,date)
+
+
+thefts <- thefts %>%
+  filter(!type %in% c("all", "percent",'others'))
+
+library(dplyr)
+library(lubridate)
+
+thefts <- thefts %>%
+  mutate(year = year(date))  # Extracts year from the date
+
+head(thefts)
+```
+```{r}
+df_summary <- thefts %>%
+  group_by(year, city) %>%
+  summarise(value = sum(value, na.rm = TRUE), .groups = "drop")
+
+top_20_cities <- df_summary %>%
+  group_by(city) %>%
+  summarise(total_value = sum(value, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(total_value)) %>%
+  slice_head(n = 20) %>%
+  pull(city)
+
+top_6_cities <- df_summary %>%
+  group_by(city) %>%
+  summarise(total_value = sum(value, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(total_value)) %>%
+  slice_head(n = 6) %>%
+  pull(city)
+
+plot_20 <- df_summary %>%
+  filter(city %in% top_20_cities)
+
+plot_6 <- thefts %>%
+  filter(city %in% top_6_cities)
+
+head(plot_20)
+```
+```{r}
+library(ggplot2)
+
+# Reverse the order of years so that 2019 is on the bottom
+df_plot <- plot_20 %>%
+  mutate(year = factor(year, levels = sort(unique(year), decreasing = TRUE)))
+
+# Reorder 'city' factor by total value descending
+df_plot <- df_plot %>%
+  group_by(city) %>%
+  mutate(city_total = sum(value, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(city = reorder(city, -city_total, FUN = max))  # `max` for consistent descending order
+
+ggplot(df_plot, aes(x = city, y = value, fill = factor(year))) +
+  geom_bar(stat = "identity") +
+  labs(title = "Top 20 Cities by Kia/Hyundia Thefts (Stacked by Year)",
+       x = "", y = "Thefts", fill = "Year") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+```{r}
+head(plot_6)
+library(ggplot2)
+library(dplyr)
+
+# Ensure date is in proper format
+plot_6$date <- as.Date(plot_6$date)
+
+ggplot(plot_6, aes(x = date, y = value, fill = city)) +
+  geom_area(position = "stack", alpha = 0.8) +
+  labs(title = "Kia/Hyundai Thefts - Top Six Cities",
+       x = "", y = "", fill = "City") +
+  theme_minimal()
+
+```
+```{r}
+thefts <- theft_map %>%
+  rename('percent' = 'percentChange2019to2022')
+
+thefts <- thefts %>%
+  filter(percent >= 0.5) %>%
+  filter(!is.na(latitude) & !is.na(longitude) & !is.na(percent)) %>%
+  # drop alaska
+  filter(latitude <= 50) %>%
+  filter(latitude >= 25 & latitude <= 50) # U.S. latitude range
+
+head(thefts)
+```
+```{r}
+library(ggplot2)
+library(maps)
+library(dplyr)
+library(scales)
+
+# Get US map data
+us_map <- map_data("state")
+
+ggplot() +
+  geom_polygon(data = us_map, aes(x = long, y = lat, group = group),
+               fill = "gray95", color = "white") +
+geom_point(data = thefts, aes(x = longitude, y = latitude, size = percent),
+           color = "steelblue", alpha = 0.2, stroke = 0)+
+  scale_size_continuous(breaks = seq(0.5, 4, by = 0.5), labels = label_percent()) +
+  coord_fixed(1.3) +
+  labs(title = "Percentage Increase in Kia/Hyundai Thefts",
+       x = "longitude", y = "latitude", size = "percent") +
+  theme_void()
+```
