@@ -1,6 +1,11 @@
-# Data Science Portfolio
+# About
 
-## Highlighted Projects
+I’m a full‑stack and DevOps systems engineer with deep experience building scalable, reliable data pipelines. After completing my Master’s in Data Science, I’ve expanded my focus to the full lifecycle of data — from ingestion and transformation to modeling, deployment, and monitoring.
+I don’t just build models; I build the systems that make them useful. I deploy solutions to the cloud with instrumentation that keeps them transparent, observable, and dependable. I’m comfortable designing ETL workflows, optimizing cloud infrastructure, and developing production‑ready applications that turn data into action.
+I’m especially interested in end‑to‑end data product development that leverages NLP and machine learning. My work emphasizes clarity, reliability, and measurable impact.
+Right now, I’m looking for opportunities where I can combine my engineering foundation with my data science training to solve real problems and build tools that scale.
+
+# Work
 
 1. [Using CNN to Classify Handwritten Numbers](projects/Using%20CNN%20to%20Classify%20Handwritten%20Numbers/README.md)
 - Description: CNN trained on MNIST-style data; includes preprocessing, augmentation, model training, and evaluation.
@@ -42,11 +47,13 @@
 - Description: Sales analysis across platforms and regions with EDA and relative ranking of best-selling titles.
 - Showcases: comparative visualizations; concise business-oriented takeaways; and reproducible EDA steps.
 
-## Other Projects
+# Contact
+
+jojacobson@my365.bellevue.edu
+
+# Other Projects
 
 - Visualizing Airport Complaints — EDA and dashboards summarizing airline complaint trends; planned polish: interactive maps and top-issue summaries.
 - Visualizing Milwaukee Car Thefts Using R — R Markdown analysis of local thefts; planned polish: cleaned Rmd output and clear methodology notes.
 - Visualizing US Weather Data — weather trends and anomaly detection; planned polish: consolidated data sources and interactive time-series plots.
 - Predicting Housing Prices — (folder present but notebook appears empty); planned polish: assemble dataset, reproduce modeling steps, and add results summary.
-
-```
